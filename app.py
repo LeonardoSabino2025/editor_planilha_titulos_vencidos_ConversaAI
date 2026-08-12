@@ -122,7 +122,13 @@ if uploaded:
         )
         st.stop()
 
-    if st.button("Processar", type="primary"):
+    col1, col2 = st.columns(2)
+    with col1:
+        gerar_chat = st.button("💬 Gerar para chat", type="primary", use_container_width=True)
+    with col2:
+        gerar_voz = st.button("📞 Gerar para chamada por voz", use_container_width=True)
+
+    if gerar_chat or gerar_voz:
         work = df.copy()
 
         work = work.drop_duplicates(subset=[name_col], keep="first")
@@ -133,8 +139,17 @@ if uploaded:
         result = work[["Nome", "Numero"]].dropna(subset=["Numero"])
         result = result[result["Nome"].astype(bool)]
 
+        if gerar_voz:
+            result = result.copy()
+            result["Numero"] = "55 " + result["Numero"]
+            file_name = "clientes_nome_telefone_voz.xlsx"
+            sucesso_label = "chamada por voz (com prefixo 55)"
+        else:
+            file_name = "clientes_nome_telefone_chat.xlsx"
+            sucesso_label = "chat"
+
         st.success(
-            f"{len(result)} clientes com telefone válido "
+            f"{len(result)} clientes com telefone válido para {sucesso_label} "
             f"(de {df[name_col].nunique()} clientes únicos na planilha original)."
         )
         st.dataframe(result, use_container_width=True)
@@ -147,7 +162,7 @@ if uploaded:
         st.download_button(
             label="⬇️ Baixar planilha (Nome + Numero)",
             data=output,
-            file_name="clientes_nome_telefone.xlsx",
+            file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 else:
