@@ -40,13 +40,26 @@ def extract_first_phone(text) -> str | None:
 
 
 # ----------------------------------------------------------------------------
-# Utilidades de coluna / datas
+# Detecção automática de cabeçalho e colunas
 # ----------------------------------------------------------------------------
 
 def strip_accents(s: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
     )
+
+
+def find_header_row(uploaded_file, max_scan_rows: int = 30) -> int:
+    """Procura, entre as primeiras linhas, aquela que contém os cabeçalhos
+    'Cliente' e 'Telefone(s)' — ignorando linhas de título/resumo acima."""
+    raw = pd.read_excel(uploaded_file, header=None, nrows=max_scan_rows, dtype=str)
+    for i, row in raw.iterrows():
+        vals = [strip_accents(str(v)).lower() for v in row if pd.notna(v)]
+        if any("cliente" in v or "nome" in v for v in vals) and any(
+            "telefone" in v for v in vals
+        ):
+            return i
+    return 0  # fallback: assume que a primeira linha já é o cabeçalho
 
 
 def guess_column(columns, keywords):
@@ -68,11 +81,10 @@ def parse_date_safe(value):
 
 st.title("📋 Editor de Planilha para Campanhas de Cobrança do ConversaAI")
 st.write(
-    "Envie a planilha original (com todos os clientes/títulos). "
-    "O app extrai o nome e o primeiro telefone de cada cliente, formata o "
-    "número no padrão brasileiro e gera uma planilha só com as colunas "
-    "**Nome** e **Numero** — uma linha por cliente, pronta para campanhas "
-    "de cobrança no ConversaAI."
+    "Envie a planilha de títulos atrasados. O app extrai automaticamente o "
+    "**nome do cliente** e o **primeiro telefone válido**, mantém apenas 1 "
+    "linha por cliente (usando o título de vencimento mais antigo) e gera a "
+    "planilha pronta para o ConversaAI."
 )
 
 DOCX_INSTRUCOES_URL = (
@@ -89,75 +101,40 @@ st.warning(
     "fora desse padrão pode fazer com que o app não reconheça as colunas "
     "corretamente."
 )
-st.link_button(
-    "⬇️ Baixar instruções (Word)",
-    url=DOCX_INSTRUCOES_URL,
-)
+st.link_button("⬇️ Baixar instruções (Word)", url=DOCX_INSTRUCOES_URL)
 
 st.divider()
 
-st.subheader("1. Envie a planilha")
-uploaded = st.file_uploader("Planilha de entrada (.xlsx)", type=["xlsx"])
+uploaded = st.file_uploader("Envie a planilha (.xlsx)", type=["xlsx"])
 
 if uploaded:
     try:
-        df = pd.read_excel(uploaded, dtype=str)
+        header_row = find_header_row(uploaded)
+        df = pd.read_excel(uploaded, header=header_row, dtype=str)
+        df = df.dropna(how="all")
     except Exception as e:
         st.error(f"Não consegui ler o arquivo: {e}")
         st.stop()
 
-    st.subheader("2. Confirme as colunas")
-    st.caption("O app tentou adivinhar automaticamente — confira antes de continuar.")
+    name_col = guess_column(df.columns, ["cliente", "nome"])
+    phone_col = guess_column(df.columns, ["telefone", "celular", "fone"])
+    date_col = guess_column(df.columns, ["vencimento"])
 
-    cols = list(df.columns)
-
-    name_guess = guess_column(cols, ["nome", "razao social", "cliente"])
-    phone_guess = guess_column(cols, ["telefone", "celular", "fone", "contato"])
-    date_guess = guess_column(cols, ["vencimento", "data venc"])
-    id_guess = guess_column(cols, ["cpf", "cnpj", "documento", "codigo cliente", "cod cliente"])
-
-    col1, col2 = st.columns(2)
-    with col1:
-        name_col = st.selectbox(
-            "Coluna do nome do cliente",
-            options=cols,
-            index=cols.index(name_guess) if name_guess in cols else 0,
+    if not name_col or not phone_col:
+        st.error(
+            "Não encontrei as colunas de Cliente e/ou Telefones nesta planilha. "
+            "Confira se o arquivo segue o mesmo padrão do sistema de origem."
         )
-        phone_col = st.selectbox(
-            "Coluna de telefone(s)",
-            options=cols,
-            index=cols.index(phone_guess) if phone_guess in cols else 0,
-        )
-    with col2:
-        use_dedup = st.checkbox(
-            "Manter apenas 1 linha por cliente (título mais antigo)",
-            value=bool(date_guess),
-        )
-        date_col = None
-        id_col = None
-        if use_dedup:
-            date_col = st.selectbox(
-                "Coluna de data de vencimento",
-                options=cols,
-                index=cols.index(date_guess) if date_guess in cols else 0,
-            )
-            id_col = st.selectbox(
-                "Agrupar clientes por (nome ou CPF/CNPJ, se houver)",
-                options=[name_col] + [c for c in cols if c != name_col],
-                index=([name_col] + [c for c in cols if c != name_col]).index(id_guess)
-                if id_guess and id_guess != name_col
-                else 0,
-            )
+        st.stop()
 
-    st.subheader("3. Gerar planilha")
     if st.button("Processar", type="primary"):
         work = df.copy()
 
-        if use_dedup and date_col:
+        if date_col:
             work["_data_venc"] = parse_date_safe(work[date_col])
             work = work.sort_values("_data_venc", na_position="last")
-            group_key = id_col if id_col else name_col
-            work = work.drop_duplicates(subset=[group_key], keep="first")
+
+        work = work.drop_duplicates(subset=[name_col], keep="first")
 
         work["Nome"] = work[name_col].astype(str).str.strip()
         work["Numero"] = work[phone_col].apply(extract_first_phone)
@@ -165,7 +142,10 @@ if uploaded:
         result = work[["Nome", "Numero"]].dropna(subset=["Numero"])
         result = result[result["Nome"].astype(bool)]
 
-        st.success(f"{len(result)} clientes com telefone válido (de {len(df)} linhas originais).")
+        st.success(
+            f"{len(result)} clientes com telefone válido "
+            f"(de {df[name_col].nunique()} clientes únicos na planilha original)."
+        )
         st.dataframe(result, use_container_width=True)
 
         output = io.BytesIO()
