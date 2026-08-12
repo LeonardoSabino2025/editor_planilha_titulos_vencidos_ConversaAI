@@ -5,7 +5,11 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Extrator Nome + Telefone", page_icon="📞", layout="centered")
+st.set_page_config(
+    page_title="Editor de Planilha para Campanhas de Cobrança do ConversaAI",
+    page_icon="📋",
+    layout="centered",
+)
 
 # ----------------------------------------------------------------------------
 # Lógica de extração de telefone
@@ -62,12 +66,13 @@ def parse_date_safe(value):
 # UI
 # ----------------------------------------------------------------------------
 
-st.title("📞 Extrator de Nome + Telefone")
+st.title("📋 Editor de Planilha para Campanhas de Cobrança do ConversaAI")
 st.write(
     "Envie a planilha original (com todos os clientes/títulos). "
     "O app extrai o nome e o primeiro telefone de cada cliente, formata o "
     "número no padrão brasileiro e gera uma planilha só com as colunas "
-    "**Nome** e **Numero** — uma linha por cliente."
+    "**Nome** e **Numero** — uma linha por cliente, pronta para campanhas "
+    "de cobrança no ConversaAI."
 )
 
 uploaded = st.file_uploader("Planilha de entrada (.xlsx)", type=["xlsx"])
