@@ -142,6 +142,7 @@ if uploaded:
         if gerar_voz:
             result = result.copy()
             result["Numero"] = "55 " + result["Numero"]
+            result = result.rename(columns={"Numero": "Telefone"})
             file_name = "clientes_nome_telefone_voz.xlsx"
             sucesso_label = "chamada por voz (com prefixo 55)"
         else:
