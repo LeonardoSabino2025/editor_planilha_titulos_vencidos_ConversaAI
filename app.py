@@ -75,6 +75,28 @@ st.write(
     "de cobrança no ConversaAI."
 )
 
+DOCX_INSTRUCOES_URL = (
+    "https://github.com/LeonardoSabino2025/editor_planilha_titulos_vencidos_ConversaAI/"
+    "raw/refs/heads/main/Como%20gerar%20relat%C3%B3rio%20-%20planilha%20de%20"
+    "t%C3%ADtulos%20atrasados%20para%20o%20ConversaAI.docx"
+)
+
+st.subheader("📄 Instruções adicionais")
+st.warning(
+    "⚠️ **Faça isso antes de enviar a planilha aqui no app.** "
+    "Baixe e siga o passo a passo abaixo para gerar o relatório de títulos "
+    "atrasados corretamente no sistema de origem. Enviar uma planilha gerada "
+    "fora desse padrão pode fazer com que o app não reconheça as colunas "
+    "corretamente."
+)
+st.link_button(
+    "⬇️ Baixar instruções (Word)",
+    url=DOCX_INSTRUCOES_URL,
+)
+
+st.divider()
+
+st.subheader("1. Envie a planilha")
 uploaded = st.file_uploader("Planilha de entrada (.xlsx)", type=["xlsx"])
 
 if uploaded:
@@ -84,7 +106,7 @@ if uploaded:
         st.error(f"Não consegui ler o arquivo: {e}")
         st.stop()
 
-    st.subheader("1. Confirme as colunas")
+    st.subheader("2. Confirme as colunas")
     st.caption("O app tentou adivinhar automaticamente — confira antes de continuar.")
 
     cols = list(df.columns)
@@ -127,7 +149,7 @@ if uploaded:
                 else 0,
             )
 
-    st.subheader("2. Gerar planilha")
+    st.subheader("3. Gerar planilha")
     if st.button("Processar", type="primary"):
         work = df.copy()
 
