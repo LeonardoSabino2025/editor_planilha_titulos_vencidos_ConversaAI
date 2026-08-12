@@ -71,10 +71,6 @@ def guess_column(columns, keywords):
     return None
 
 
-def parse_date_safe(value):
-    return pd.to_datetime(value, dayfirst=True, errors="coerce")
-
-
 # ----------------------------------------------------------------------------
 # UI
 # ----------------------------------------------------------------------------
@@ -82,9 +78,9 @@ def parse_date_safe(value):
 st.title("📋 Editor de Planilha para Campanhas de Cobrança do ConversaAI")
 st.write(
     "Envie a planilha de títulos atrasados. O app extrai automaticamente o "
-    "**nome do cliente** e o **primeiro telefone válido**, mantém apenas 1 "
-    "linha por cliente (usando o título de vencimento mais antigo) e gera a "
-    "planilha pronta para o ConversaAI."
+    "**nome do cliente** e o **primeiro telefone válido**, remove nomes "
+    "duplicados e clientes sem telefone, e gera a planilha pronta para o "
+    "ConversaAI."
 )
 
 DOCX_INSTRUCOES_URL = (
@@ -118,7 +114,6 @@ if uploaded:
 
     name_col = guess_column(df.columns, ["cliente", "nome"])
     phone_col = guess_column(df.columns, ["telefone", "celular", "fone"])
-    date_col = guess_column(df.columns, ["vencimento"])
 
     if not name_col or not phone_col:
         st.error(
@@ -129,10 +124,6 @@ if uploaded:
 
     if st.button("Processar", type="primary"):
         work = df.copy()
-
-        if date_col:
-            work["_data_venc"] = parse_date_safe(work[date_col])
-            work = work.sort_values("_data_venc", na_position="last")
 
         work = work.drop_duplicates(subset=[name_col], keep="first")
 
