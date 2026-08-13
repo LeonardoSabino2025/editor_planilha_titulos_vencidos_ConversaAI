@@ -1,4 +1,4 @@
-# Extrator de Nome + Telefone
+# Editor de Planilha para Campanhas de Cobrança do ConversaAI
 
 App Streamlit que recebe a planilha de clientes, extrai **Nome** e o **primeiro
 telefone válido**, formata o número no padrão `(XX) 9XXXX-XXXX` e (opcionalmente)
