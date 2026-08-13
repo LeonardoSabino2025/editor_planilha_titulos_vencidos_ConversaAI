@@ -234,9 +234,9 @@ if uploaded:
 
     col1, col2 = st.columns(2)
     with col1:
-        gerar_chat = st.button("💬 Gerar para chat", type="primary", use_container_width=True)
+        gerar_chat = st.button("💬 Gerar para campanha por chat", type="primary", use_container_width=True)
     with col2:
-        gerar_voz = st.button("📞 Gerar para chamada por voz", use_container_width=True)
+        gerar_voz = st.button("📞 Gerar para chamada por voz +55", use_container_width=True)
 
     col3, col4 = st.columns(2)
     with col3:
