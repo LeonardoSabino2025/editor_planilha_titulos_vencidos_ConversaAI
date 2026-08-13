@@ -201,7 +201,7 @@ st.warning(
     "⚠️ **Faça isso antes de enviar a planilha aqui no app.** "
     "Baixe e siga o passo a passo abaixo para gerar o relatório de títulos "
     "atrasados corretamente no sistema de origem. Enviar uma planilha gerada "
-    "fora desse padrão pode fazer com que o app não reconheça as colunas "
+    "fora desse padrão pode trazer problemas jurídicos e/ou fazer com que o app não reconheça as colunas "
     "corretamente."
 )
 st.link_button("⬇️ Baixar instruções (Word)", url=DOCX_INSTRUCOES_URL)
