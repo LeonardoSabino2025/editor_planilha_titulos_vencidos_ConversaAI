@@ -71,6 +71,113 @@ def guess_column(columns, keywords):
     return None
 
 
+def guess_valor_column(columns):
+    """Acha a coluna 'Valor', evitando confundi-la com 'Valor Corrigido'."""
+    norm_cols = {c: strip_accents(str(c)).lower().strip() for c in columns}
+    for col, norm in norm_cols.items():
+        if norm == "valor":
+            return col
+    for col, norm in norm_cols.items():
+        if "valor" in norm and "corrigido" not in norm:
+            return col
+    return None
+
+
+# ----------------------------------------------------------------------------
+# Lógica da planilha "para cobrança" (um registro por devedor, com o valor
+# original mais recente da série de parcelas repetidas)
+# ----------------------------------------------------------------------------
+
+TEMPLATE_COLUMNS = [
+    "Nome",
+    "Email",
+    "Telefone",
+    "Documento",
+    "Valor Original",
+    "Data Vencimento",
+    "CEP",
+    "Logradouro",
+    "Número",
+    "Complemento",
+    "Bairro",
+    "Cidade",
+    "Estado",
+    "Descricao",
+]
+
+
+def pick_latest_recurring_row(group, valor_col, venc_dt_col):
+    """Dentro dos títulos de um mesmo cliente, identifica o valor que se
+    repete (a mensalidade normal) e devolve a linha com o vencimento mais
+    recente dessa série — descartando valores fora do padrão (ex.: boletos
+    de acordo não pagos), que normalmente aparecem uma única vez e com
+    valor maior."""
+    counts = group[valor_col].value_counts()
+    max_count = counts.max()
+    candidates = counts[counts == max_count].index
+    modal_value = min(candidates)
+    subset = group[group[valor_col] == modal_value].sort_values(venc_dt_col)
+    return subset.iloc[-1]
+
+
+def build_cobranca_df(df, name_col, doc_col, valor_col, venc_col, phone_col, add_ddi):
+    work = df.copy()
+    work[valor_col] = pd.to_numeric(work[valor_col], errors="coerce")
+    work["_venc_dt"] = pd.to_datetime(work[venc_col], format="%d/%m/%Y", errors="coerce")
+    work = work.dropna(subset=[valor_col, "_venc_dt", name_col])
+
+    picked_indices = [
+        pick_latest_recurring_row(group, valor_col, "_venc_dt").name
+        for _, group in work.groupby(name_col, sort=False)
+    ]
+    picked = work.loc[picked_indices].reset_index(drop=True)
+
+    telefone = picked[phone_col].apply(extract_first_phone)
+    if add_ddi:
+        telefone = telefone.apply(lambda t: f"55 {t}" if t else t)
+
+    out = pd.DataFrame(
+        {
+            "Nome": picked[name_col].astype(str).str.strip(),
+            "Email": "",
+            "Telefone": telefone,
+            "Documento": picked[doc_col],
+            "Valor Original": picked[valor_col],
+            "Data Vencimento": picked["_venc_dt"],
+            "CEP": "",
+            "Logradouro": "",
+            "Número": "",
+            "Complemento": "",
+            "Bairro": "",
+            "Cidade": "",
+            "Estado": "",
+            "Descricao": "",
+        }
+    )
+    out = out.dropna(subset=["Telefone"])
+    out = out[out["Nome"].astype(bool)]
+    out = out[TEMPLATE_COLUMNS]
+    return out
+
+
+def cobranca_to_excel_bytes(out_df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        out_df.to_excel(writer, index=False, sheet_name="Clientes")
+        ws = writer.sheets["Clientes"]
+
+        for cell in ws[1]:
+            cell.font = cell.font.copy(bold=True)
+
+        date_idx = out_df.columns.get_loc("Data Vencimento") + 1
+        valor_idx = out_df.columns.get_loc("Valor Original") + 1
+        for row in range(2, len(out_df) + 2):
+            ws.cell(row=row, column=date_idx).number_format = "DD/MM/YYYY"
+            ws.cell(row=row, column=valor_idx).number_format = "0.00"
+    output.seek(0)
+    return output
+
+
 # ----------------------------------------------------------------------------
 # UI
 # ----------------------------------------------------------------------------
@@ -114,6 +221,9 @@ if uploaded:
 
     name_col = guess_column(df.columns, ["cliente", "nome"])
     phone_col = guess_column(df.columns, ["telefone", "celular", "fone"])
+    doc_col = guess_column(df.columns, ["cpf", "cnpj"])
+    valor_col = guess_valor_column(df.columns)
+    venc_col = guess_column(df.columns, ["vencimento"])
 
     if not name_col or not phone_col:
         st.error(
@@ -127,6 +237,12 @@ if uploaded:
         gerar_chat = st.button("💬 Gerar para chat", type="primary", use_container_width=True)
     with col2:
         gerar_voz = st.button("📞 Gerar para chamada por voz", use_container_width=True)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        gerar_cobranca = st.button("🧾 Gerar para cobrança", use_container_width=True)
+    with col4:
+        gerar_cobranca_ddi = st.button("🧾 Gerar para cobrança +55", use_container_width=True)
 
     if gerar_chat or gerar_voz:
         work = df.copy()
@@ -162,6 +278,42 @@ if uploaded:
 
         st.download_button(
             label="⬇️ Baixar planilha (Nome + Numero)",
+            data=output,
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    if gerar_cobranca or gerar_cobranca_ddi:
+        if not doc_col or not valor_col or not venc_col:
+            st.error(
+                "Não encontrei as colunas de CPF/CNPJ, Valor e/ou Vencimento "
+                "nesta planilha. Confira se o arquivo segue o mesmo padrão do "
+                "sistema de origem."
+            )
+            st.stop()
+
+        result = build_cobranca_df(
+            df, name_col, doc_col, valor_col, venc_col, phone_col,
+            add_ddi=gerar_cobranca_ddi,
+        )
+
+        if gerar_cobranca_ddi:
+            file_name = "clientes_cobranca_ddi55.xlsx"
+            sucesso_label = "cobrança (com prefixo 55)"
+        else:
+            file_name = "clientes_cobranca.xlsx"
+            sucesso_label = "cobrança"
+
+        st.success(
+            f"{len(result)} clientes com telefone válido para {sucesso_label} "
+            f"(de {df[name_col].nunique()} clientes únicos na planilha original)."
+        )
+        st.dataframe(result, use_container_width=True)
+
+        output = cobranca_to_excel_bytes(result)
+
+        st.download_button(
+            label="⬇️ Baixar planilha (modelo devedor)",
             data=output,
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
