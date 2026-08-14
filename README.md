@@ -1,5 +1,7 @@
 # Editor de Planilha para Campanhas de Cobrança do ConversaAI
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://editorplanilhatitulosvencidosconversaai-63epg5ngbbk3mry2auzszr.streamlit.app/)
+
 App Streamlit que recebe a planilha de clientes, extrai **Nome** e o **primeiro
 telefone válido**, formata o número no padrão `(XX) 9XXXX-XXXX` e (opcionalmente)
 mantém apenas uma linha por cliente, usando o título de vencimento mais antigo.
